@@ -1,0 +1,132 @@
+version: '3.1'
+services:
+  reverse-proxy:
+    image: traefik:1.7-alpine
+    command: >
+      --docker
+      --docker.swarmmode
+      --docker.watch
+      --api
+      --loglevel=DEBUG
+    ports:
+      # The HTTP port
+      - 80:80
+      # The Web UI
+      - 8080:8080
+    networks:
+      - example-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      # mode: replicated
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=false"
+  visualizer:
+    image: dockersamples/visualizer:latest
+    ports:
+      - 8888:8080
+    networks:
+      - example-network
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=false"
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    ports:
+      - 15672:15672
+    networks:
+      - example-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=false"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_NODE_PORT: ${RABBITMQ_NODE_PORT}
+    healthcheck:
+      test: ['CMD', 'rabbitmqctl', 'status']
+      interval: 30s
+      timeout: 15s
+      retries: 3
+  redis:
+    image: redis:5-alpine
+    networks:
+      - example-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=false"
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 30s
+      timeout: 15s
+      retries: 3
+  app-celery-worker:
+    image: jinyoungk/flask-docker-swarm-example-app:latest
+    command: ['app-celery-worker']
+    networks:
+      - example-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=false"
+    environment:
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+      CACHE_REDIS_URL: ${CACHE_REDIS_URL}
+      SESSION_TYPE: ${SESSION_TYPE}
+      SESSION_REDIS_URL: ${SESSION_REDIS_URL}
+    depends_on:
+      - reverse-proxy
+      - rabbitmq
+      - redis
+  app:
+    image: jinyoungk/flask-docker-swarm-example-app:latest
+    command: ['app']
+    networks:
+      - example-network
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.port=5000"
+        - "traefik.docker.network=flask-docker-swarm-example_example-network"
+        - "traefik.frontend.rule=PathPrefix:/;"
+        - "traefik.backend.loadbalancer.stickiness=true"
+    environment:
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+      CACHE_REDIS_URL: ${CACHE_REDIS_URL}
+      SESSION_TYPE: ${SESSION_TYPE}
+      SESSION_REDIS_URL: ${SESSION_REDIS_URL}
+    depends_on:
+      - reverse-proxy
+      - rabbitmq
+      - redis
+      - app-celery-worker
+
+networks:
+  example-network:
+    driver: overlay
