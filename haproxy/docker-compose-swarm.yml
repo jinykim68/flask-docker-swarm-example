@@ -1,0 +1,112 @@
+version: '3.1'
+services:
+  haproxy:
+    image: eeacms/haproxy
+    ports:
+      - 80:5000
+      - 1936:1936
+    networks:
+      - example-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      placement:
+        constraints: [node.role == manager]
+    environment:
+      BACKENDS: app
+      HTTPCHK: 'GET /config'
+      DNS_ENABLED: 'true'
+      LOG_LEVEL: debug
+    depends_on:
+      - app
+  visualizer:
+    image: dockersamples/visualizer:latest
+    ports:
+      - 8888:8080
+    networks:
+      - example-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints: [node.role == manager]
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    ports:
+      - 15672:15672
+    networks:
+      - example-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_NODE_PORT: ${RABBITMQ_NODE_PORT}
+    healthcheck:
+      test: ['CMD', 'rabbitmqctl', 'status']
+      interval: 30s
+      timeout: 15s
+      retries: 3
+  redis:
+    image: redis:5-alpine
+    networks:
+      - example-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 30s
+      timeout: 15s
+      retries: 3
+  app-celery-worker:
+    image: jinyoungk/flask-docker-swarm-example-app:latest
+    command: ['app-celery-worker']
+    networks:
+      - example-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+      CACHE_REDIS_URL: ${CACHE_REDIS_URL}
+      SESSION_TYPE: ${SESSION_TYPE}
+      SESSION_REDIS_URL: ${SESSION_REDIS_URL}
+    depends_on:
+      - reverse-proxy
+      - rabbitmq
+      - redis
+  app:
+    image: jinyoungk/flask-docker-swarm-example-app:latest
+    command: ['app', '0.0.0.0:80']
+    networks:
+      - example-network
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+    environment:
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+      CACHE_REDIS_URL: ${CACHE_REDIS_URL}
+      SESSION_TYPE: ${SESSION_TYPE}
+      SESSION_REDIS_URL: ${SESSION_REDIS_URL}
+    depends_on:
+      - reverse-proxy
+      - rabbitmq
+      - redis
+      - app-celery-worker
+
+networks:
+  example-network:
+    driver: overlay
