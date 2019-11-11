@@ -106,4 +106,7 @@ venv.bak/
 # Visual Studio Code
 .vscode/
 
+# Deployment
+deployment/ansible/tmp
+
 .idea

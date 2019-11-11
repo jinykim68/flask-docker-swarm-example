@@ -1,0 +1,30 @@
+---
+- name: Create temp directory
+  file:
+    path: "{{ playbook_dir }}/tmp"
+    recurse: yes
+    state: directory
+
+- name: Configure compose
+  template:
+    src: ../templates/docker-compose.yaml.j2
+    dest: "{{ playbook_dir }}/tmp/docker-compose.yaml"
+
+- name: Login to docker repo
+  docker_login:
+    username: "{{ docker_login_username }}"
+    password: "{{ docker_login_password }}"
+    state: present
+
+- name: Stop docker compose
+  docker_compose:
+    project_src: "{{ playbook_dir }}/tmp"
+    state: absent
+
+- name: Run docker compose
+  docker_compose:
+    project_src: "{{ playbook_dir }}/tmp"
+    pull: yes
+    scale:
+      app: "{{ docker_compose_scale_app }}"
+    state: present

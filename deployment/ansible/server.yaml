@@ -1,0 +1,17 @@
+---
+- hosts: localhost
+
+  vars_prompt:
+    - name: docker_login_username
+      prompt: "Your docker login username"
+      private: no
+    - name: docker_login_password
+      prompt: "Your docker login password"
+      private: yes
+    - name: docker_compose_scale_app
+      prompt: "Number of app containers ('--scale app=*' option for docker-compose)"
+      private: no
+      default: 3
+
+  roles:
+    - role: flask-docker-swarm-example

@@ -1,0 +1,13 @@
+---
+rabbitmq_erlang_cookie: s3cr3tc00ki3
+rabbitmq_default_user: rabbitmq
+rabbitmq_default_pass: rabbitmq
+rabbitmq_node_port: 5672
+
+app_celery_broker_url: pyamqp://rabbitmq:rabbitmq@rabbitmq:5672//
+app_celery_result_backend: redis://redis:6379/0
+
+app_cache_redis_url: redis://redis:6379/0
+
+app_session_type: redis
+app_session_redis_url: redis://redis:6379
